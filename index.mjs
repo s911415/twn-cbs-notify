@@ -27,8 +27,18 @@ async function fetchAlarmLatestUpdate(lambdaClient) {
     return result;
 }
 
+function formatAlarm(am) {
+    let url = 'https://cbs.tw/' + (am.release_time.replace(/\D/g, '').substr(2, 4)) + am.page_key;
+
+    let message = am.CMAMtext;
+    message += '\n---\n';
+    message += url;
+
+    return message;
+}
+
 export const handler = async (event) => {
-    console.log(JSON.stringify(event));
+    // console.log(JSON.stringify(event));
     const httpsClient = axios.create({
         httpsAgent: new https.Agent({keepAlive: true}),
         headers: {
@@ -68,7 +78,7 @@ export const handler = async (event) => {
 
     let latestTimeMap = await fetchAlarmLatestUpdate(lambdaClient);
     let results = await Promise.all(promises);
-    let newMessages = [];
+    let newAlarms = [];
     let tagUpdate = {};
 
     for(let i = 0, j = pullingSources.length; i < j; i++) {
@@ -80,7 +90,7 @@ export const handler = async (event) => {
 
         result.forEach(r => {
             if(latestTime.localeCompare(r.release_time) < 0) {
-                newMessages.push(r.CMAMtext);
+                newAlarms.push(r);
                 tagUpdate[key] = r.release_time;
             }
         });
@@ -100,8 +110,8 @@ export const handler = async (event) => {
     // post to channel
     if(process.env.SLACK_WEBHOOKS) {        
         let webhooks = process.env.SLACK_WEBHOOKS.split(',');
-        newMessages.forEach(m => {
-            let formattedMessage = m; // TODO
+        newAlarms.forEach(am => {
+            let formattedMessage = formatAlarm(am);
             webhooks.forEach(webhook => {                
                 postPromises.push(httpsClient.post(
                     webhook, {
