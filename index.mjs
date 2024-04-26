@@ -10,6 +10,9 @@ const LAMBDA_ARN = process.env.LAMBDA_ARN;
 
 const TYPE_PREFIX = 'alertType_';
 
+let _httpsClient = null;
+let _lambdaClient = null;
+
 async function fetchAlarmLatestUpdate(lambdaClient) {
     const command = new ListTagsCommand({
         Resource: LAMBDA_ARN,
@@ -37,15 +40,33 @@ function formatAlarm(am) {
     return message;
 }
 
+function isTestMessage(message) {
+    return !!message.match(/(演練|演習)/ig);
+}
+
+function getHttpsClient() {
+    if(_httpsClient === null) {
+        _httpsClient = axios.create({
+            httpsAgent: new https.Agent({keepAlive: true}),
+            headers: {
+                'accept': 'application/json',
+            },
+        });
+    }
+    return _httpsClient;
+}
+
+function getLambdaClient() {
+    if(_lambdaClient === null) {
+        _lambdaClient = new LambdaClient();
+    }
+    return _lambdaClient;
+}
+
 export const handler = async (event) => {
     // console.log(JSON.stringify(event));
-    const httpsClient = axios.create({
-        httpsAgent: new https.Agent({keepAlive: true}),
-        headers: {
-            'accept': 'application/json',
-        },
-    });
-    const lambdaClient = new LambdaClient({region: 'ap-northeast-3'});
+    const httpsClient = getHttpsClient();
+    const lambdaClient = getLambdaClient();
 
     let today = new Date().toLocaleString('zh-TW', {
         year: 'numeric',
@@ -89,13 +110,12 @@ export const handler = async (event) => {
         let latestTime = latestTimeMap[key] || '';
 
         result.forEach(r => {
-            if(latestTime.localeCompare(r.release_time) < 0) {
+            if(latestTime.localeCompare(r.release_time) < 0 && !isTestMessage(r.CMAMtext)) {
                 newAlarms.push(r);
                 tagUpdate[key] = r.release_time;
             }
         });
     }
-
 
     let postPromises = [];
 
