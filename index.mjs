@@ -30,10 +30,17 @@ async function fetchAlarmLatestUpdate(lambdaClient) {
     return result;
 }
 
+function filterMessage(oMessage) {
+    let message = oMessage;
+    message = message.replace(/\/\/gov\.tw\//g, '// gov [.] tw/');
+
+    return message;
+}
+
 function formatAlarm(am) {
     let url = 'https://cbs.tw/' + (am.release_time.replace(/\D/g, '').substr(2, 4)) + am.page_key;
 
-    let message = am.CMAMtext;
+    let message = filterMessage(am.CMAMtext);
     message += '\n---\n';
     message += url;
 
